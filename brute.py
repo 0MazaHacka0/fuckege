@@ -5,14 +5,27 @@ import base64
 import hashlib
 
 base_path = "http://check.ege.edu.ru/"
-# Api
-captcha_uri = "api/captcha"
-login_uri = "api/participant/login"
+# API
+api = {
+    "captcha": "api/captcha",
+    "login": "api/participant/login",
+    "region": "api/region"
+}
+
+regions = list()
 
 token = ""
 captcha = ""
 
-last_name_dict = ""
+
+def get_regions():
+
+    global regions
+
+    r = requests.get(base_path + api["region"])
+    temp = json.loads(r.text)
+    for region in  temp:
+        regions.append(region["Id"])
 
 
 def solve_captcha():
@@ -22,9 +35,9 @@ def solve_captcha():
     solved = False
 
     while not solved:
-        print("Send GET to " + base_path + captcha_uri)
+        print("Send GET to " + base_path + api["captcha"])
 
-        r = requests.get(base_path + captcha_uri)
+        r = requests.get(base_path + api["captcha"])
         _json = json.loads(r.text)
         image = _json['Image']
         token = _json['Token']
@@ -39,7 +52,7 @@ def solve_captcha():
         os.system("start " + "image.jpg")
         captcha = int(input())
 
-        status = requests.post(base_path + login_uri, data={
+        status = requests.post(base_path + api["login"], data={
             "Captcha": captcha,
             "Code": "",
             "Document": "0000585858",
@@ -58,7 +71,7 @@ def solve_captcha():
 
 
 def send_request(code, document, hash, region):
-    r = requests.post(base_path + login_uri, data={
+    r = requests.post(base_path + api["login"], data={
             "Captcha": captcha,
             "Code": code,
             "Document": document,
@@ -68,6 +81,7 @@ def send_request(code, document, hash, region):
         }).text
     return r
 
+get_regions()
 
 solve_captcha()
 while True:
