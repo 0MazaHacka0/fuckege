@@ -91,6 +91,11 @@ def save_good(fullname, document, region):
         file.write(fullname + " " + str(region) + " " + str(document) + "\n")
 
 
+def save_bad(fullname, document, region):
+    with open("bad.txt", "a", encoding="utf-8") as file:
+        file.write(fullname + " " + str(region) + " " + str(document) + "\n")
+
+
 get_regions()
 solve_captcha()
 
@@ -144,6 +149,7 @@ for fullname in fios:
                 found = True
             elif result == '"Участник не найден"':
                 print("Login failed. Trying next one")
+                save_bad(fullname, document, region)
                 solved = True
             elif result == '"Пожалуйста, проверьте правильность введённого кода с картинки"':
                 # Captcha die
