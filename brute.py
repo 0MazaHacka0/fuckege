@@ -83,7 +83,7 @@ def send_request(code, document, hash, region):
 
 
 def get_hash(fullname):
-    return hashlib.md5(fullname.lower().strip().replace(" ", "").replace("й", "и").encode("utf-8")).hexdigest()
+    return hashlib.md5(fullname.lower().strip().replace(" ", "").replace("й", "и").replace("ё", "е").encode("utf-8")).hexdigest()
 
 
 def save_good(fullname, document, region):
